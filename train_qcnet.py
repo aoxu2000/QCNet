@@ -14,6 +14,8 @@
 from argparse import ArgumentParser
 
 import pytorch_lightning as pl
+import torch
+torch.set_float32_matmul_precision('medium')
 from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.strategies import DDPStrategy

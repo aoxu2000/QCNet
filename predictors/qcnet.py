@@ -71,6 +71,7 @@ class QCNet(pl.LightningModule):
                  T_max: int,
                  submission_dir: str,
                  submission_file_name: str,
+                 use_mamba: bool,
                  **kwargs) -> None:
         super(QCNet, self).__init__()
         self.save_hyperparameters()
@@ -118,6 +119,7 @@ class QCNet(pl.LightningModule):
             num_heads=num_heads,
             head_dim=head_dim,
             dropout=dropout,
+            use_mamba=use_mamba,
         )
         self.decoder = QCNetDecoder(
             dataset=dataset,
@@ -137,6 +139,7 @@ class QCNet(pl.LightningModule):
             num_heads=num_heads,
             head_dim=head_dim,
             dropout=dropout,
+            use_mamba=use_mamba,
         )
 
         self.reg_loss = NLLLoss(component_distribution=['laplace'] * output_dim + ['von_mises'] * output_head,
@@ -402,4 +405,5 @@ class QCNet(pl.LightningModule):
         parser.add_argument('--T_max', type=int, default=64)
         parser.add_argument('--submission_dir', type=str, default='./')
         parser.add_argument('--submission_file_name', type=str, default='submission')
+        parser.add_argument('--use_mamba', type=bool, default=False)
         return parent_parser

@@ -25,6 +25,7 @@ from utils import angle_between_2d_vectors
 from utils import merge_edges
 from utils import weight_init
 from utils import wrap_angle
+from mamba_ssm import Mamba
 
 
 class QCNetMapEncoder(nn.Module):
@@ -39,7 +40,8 @@ class QCNetMapEncoder(nn.Module):
                  num_layers: int,
                  num_heads: int,
                  head_dim: int,
-                 dropout: float) -> None:
+                 dropout: float,
+                 use_mamba: bool) -> None:
         super(QCNetMapEncoder, self).__init__()
         self.dataset = dataset
         self.input_dim = input_dim
@@ -82,14 +84,32 @@ class QCNetMapEncoder(nn.Module):
                                             num_freq_bands=num_freq_bands)
         self.r_pl2pl_emb = FourierEmbedding(input_dim=input_dim_r_pl2pl, hidden_dim=hidden_dim,
                                             num_freq_bands=num_freq_bands)
-        self.pt2pl_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.pl2pl_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=False, has_pos_emb=True) for _ in range(num_layers)]
-        )
+        if use_mamba:
+            self.pt2pl_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+            self.pl2pl_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+        else:
+            self.pt2pl_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.pl2pl_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=False, has_pos_emb=True) for _ in range(num_layers)]
+            )
         self.apply(weight_init)
 
     def forward(self, data: HeteroData) -> Dict[str, torch.Tensor]:

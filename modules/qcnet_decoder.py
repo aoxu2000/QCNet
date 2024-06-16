@@ -30,6 +30,7 @@ from utils import angle_between_2d_vectors
 from utils import bipartite_dense_to_sparse
 from utils import weight_init
 from utils import wrap_angle
+from mamba_ssm import Mamba
 
 
 class QCNetDecoder(nn.Module):
@@ -51,7 +52,8 @@ class QCNetDecoder(nn.Module):
                  num_layers: int,
                  num_heads: int,
                  head_dim: int,
-                 dropout: float) -> None:
+                 dropout: float,
+                 use_mamba: bool) -> None:
         super(QCNetDecoder, self).__init__()
         self.dataset = dataset
         self.input_dim = input_dim
@@ -86,34 +88,96 @@ class QCNetDecoder(nn.Module):
         self.traj_emb = nn.GRU(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=1, bias=True,
                                batch_first=False, dropout=0.0, bidirectional=False)
         self.traj_emb_h0 = nn.Parameter(torch.zeros(1, hidden_dim))
-        self.t2m_propose_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.pl2m_propose_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.a2m_propose_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.m2m_propose_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,
-                                                     dropout=dropout, bipartite=False, has_pos_emb=False)
-        self.t2m_refine_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.pl2m_refine_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.a2m_refine_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.m2m_refine_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,
-                                                    dropout=dropout, bipartite=False, has_pos_emb=False)
+        if use_mamba:
+            self.t2m_propose_attn_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+            self.pl2m_propose_attn_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+            self.a2m_propose_attn_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+            self.m2m_propose_attn_layer = Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                )
+            self.t2m_refine_attn_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+            self.pl2m_refine_attn_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+            self.a2m_refine_attn_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+            self.m2m_refine_attn_layer = Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                )
+        else:
+            self.t2m_propose_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.pl2m_propose_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.a2m_propose_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.m2m_propose_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,
+                                                         dropout=dropout, bipartite=False, has_pos_emb=False)
+            self.t2m_refine_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.pl2m_refine_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.a2m_refine_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.m2m_refine_attn_layer = AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim,
+                                                        dropout=dropout, bipartite=False, has_pos_emb=False)
         self.to_loc_propose_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim,
                                            output_dim=num_future_steps * output_dim // num_recurrent_steps)
         self.to_scale_propose_pos = MLPLayer(input_dim=hidden_dim, hidden_dim=hidden_dim,

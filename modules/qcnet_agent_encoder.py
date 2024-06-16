@@ -27,6 +27,7 @@ from layers.fourier_embedding import FourierEmbedding
 from utils import angle_between_2d_vectors
 from utils import weight_init
 from utils import wrap_angle
+from mamba_ssm import Mamba
 
 
 class QCNetAgentEncoder(nn.Module):
@@ -43,7 +44,8 @@ class QCNetAgentEncoder(nn.Module):
                  num_layers: int,
                  num_heads: int,
                  head_dim: int,
-                 dropout: float) -> None:
+                 dropout: float,
+                 use_mamba: bool) -> None:
         super(QCNetAgentEncoder, self).__init__()
         self.dataset = dataset
         self.input_dim = input_dim
@@ -57,6 +59,7 @@ class QCNetAgentEncoder(nn.Module):
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.dropout = dropout
+        self.use_mamba = use_mamba
 
         if dataset == 'argoverse_v2':
             input_dim_x_a = 4
@@ -76,18 +79,44 @@ class QCNetAgentEncoder(nn.Module):
                                            num_freq_bands=num_freq_bands)
         self.r_a2a_emb = FourierEmbedding(input_dim=input_dim_r_a2a, hidden_dim=hidden_dim,
                                           num_freq_bands=num_freq_bands)
-        self.t_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=False, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.pl2a_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
-        )
-        self.a2a_attn_layers = nn.ModuleList(
-            [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
-                            bipartite=False, has_pos_emb=True) for _ in range(num_layers)]
-        )
+        if use_mamba:
+            self.t_attn_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+            self.pl2a_attn_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+            self.a2a_attn_layers = nn.ModuleList(
+                [Mamba(
+                    d_model=hidden_dim,  # Model dimension d_model
+                    d_state=16,  # SSM state expansion factor
+                    d_conv=4,  # Local convolution width
+                    expand=2,  # Block expansion factor
+                ) for _ in range(num_layers)]
+            )
+        else:
+            self.t_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=False, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.pl2a_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=True, has_pos_emb=True) for _ in range(num_layers)]
+            )
+            self.a2a_attn_layers = nn.ModuleList(
+                [AttentionLayer(hidden_dim=hidden_dim, num_heads=num_heads, head_dim=head_dim, dropout=dropout,
+                                bipartite=False, has_pos_emb=True) for _ in range(num_layers)]
+            )
         self.apply(weight_init)
 
     def forward(self,

@@ -37,7 +37,9 @@ class QCNetEncoder(nn.Module):
                  num_agent_layers: int,
                  num_heads: int,
                  head_dim: int,
-                 dropout: float) -> None:
+                 dropout: float,
+                 use_mamba: bool,
+                 ) -> None:
         super(QCNetEncoder, self).__init__()
         self.map_encoder = QCNetMapEncoder(
             dataset=dataset,
@@ -50,6 +52,7 @@ class QCNetEncoder(nn.Module):
             num_heads=num_heads,
             head_dim=head_dim,
             dropout=dropout,
+            use_mamba=use_mamba,
         )
         self.agent_encoder = QCNetAgentEncoder(
             dataset=dataset,
@@ -64,6 +67,7 @@ class QCNetEncoder(nn.Module):
             num_heads=num_heads,
             head_dim=head_dim,
             dropout=dropout,
+            use_mamba=use_mamba,
         )
 
     def forward(self, data: HeteroData) -> Dict[str, torch.Tensor]:
